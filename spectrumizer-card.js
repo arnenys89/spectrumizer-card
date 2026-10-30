@@ -1,5 +1,9 @@
 /* Spectrumizer: live FFT line spectrum and waterfall history. */
 class SpectrumizerCard extends HTMLElement {
+  constructor() {
+    super();
+    this._zoom = 1;
+  }
   setConfig(config) {
     if (!config || !config.entity) throw new Error("Geef een Spectrumizer-sensor op via 'entity'.");
     this.config = {name:"Live spectrum", max_frequency:null, history_frames:80, ...config};
@@ -15,13 +19,21 @@ class SpectrumizerCard extends HTMLElement {
     const fs=a.frequencies||[], ms=a.magnitudes||[], hist=a.history||[];
     const ready=a.ready===true && fs.length===ms.length && fs.length>1;
     const peak=state&&!["unknown","unavailable"].includes(state.state)?Number(state.state):null;
-    const maxF=Number(this.config.max_frequency)>0?Number(this.config.max_frequency):(Number(a.sampling_rate_hz)/2||1);
+    const baseMaxF=Number(this.config.max_frequency)>0?Number(this.config.max_frequency):(Number(a.sampling_rate_hz)/2||1);
+    const maxF=Math.max(baseMaxF/1000,baseMaxF/this._zoom);
     this.shadowRoot.innerHTML=`
       <ha-card header="${this._esc(this.config.name)}"><div class="content">
         <div class="summary">
           <div><small>Dominante frequentie</small><strong>${Number.isFinite(peak)?peak.toFixed(3)+" Hz":"—"}</strong></div>
           <div><small>Samples</small><strong>${a.samples_collected??0} / ${a.window_size??"—"}</strong></div>
           <div><small>Resolutie</small><strong>${a.frequency_resolution_hz??"—"} Hz</strong></div>
+        </div>
+        <div class="zoom-controls" aria-label="Frequentiezoom">
+          <span>Frequentiezoom</span>
+          <button id="zoom-out" type="button" title="Uitzoomen" aria-label="Uitzoomen">−</button>
+          <button id="zoom-in" type="button" title="Inzoomen" aria-label="Inzoomen">+</button>
+          <button id="zoom-reset" type="button" title="Zoom herstellen">Reset</button>
+          <small>${this._zoom.toFixed(1)}×</small>
         </div>
         ${ready?this._spectrum(fs,ms,maxF):'<div class="empty">Samples verzamelen… Het spectrum verschijnt zodra het venster gevuld is.</div>'}
         <div class="section-title">Geschiedenis · spectrogram</div>
@@ -30,12 +42,18 @@ class SpectrumizerCard extends HTMLElement {
       </div></ha-card>
       <style>
         :host{display:block}.content{padding:12px 14px 14px}.summary{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:12px}
-        .summary>div{display:flex;flex-direction:column;gap:4px;min-width:90px}small,.footer,.timeaxis{color:var(--secondary-text-color);font-size:12px}
+        .summary>div{display:flex;flex-direction:column;gap:4px;min-width:90px}.zoom-controls{display:flex;align-items:center;gap:8px;margin:4px 0 8px}.zoom-controls span{font-size:12px;color:var(--secondary-text-color);margin-right:auto}.zoom-controls button{min-width:32px;height:30px;border:1px solid var(--divider-color);border-radius:6px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:18px;cursor:pointer}.zoom-controls button:last-of-type{font-size:12px;padding:0 10px}.zoom-controls button:disabled{opacity:.35;cursor:default}.zoom-controls small,.footer,.timeaxis{color:var(--secondary-text-color);font-size:12px}
         strong{font-size:17px;font-weight:500}.section-title{font-size:14px;font-weight:500;margin:14px 0 6px}
         svg{display:block;width:100%;height:auto}canvas{display:block;width:100%;height:300px;background:#080b0b}
         .timeaxis{display:flex;justify-content:space-between;padding:4px 0}.empty{min-height:180px;display:grid;place-items:center;text-align:center;color:var(--secondary-text-color)}
         .short{min-height:70px}.footer{margin-top:10px;overflow-wrap:anywhere}
       </style>`;
+    const zoomIn=this.shadowRoot.getElementById("zoom-in");
+    const zoomOut=this.shadowRoot.getElementById("zoom-out");
+    const zoomReset=this.shadowRoot.getElementById("zoom-reset");
+    if(zoomIn)zoomIn.addEventListener("click",()=>{this._zoom=Math.min(32,Math.round(this._zoom*1.5*100)/100);this._render();});
+    if(zoomOut)zoomOut.addEventListener("click",()=>{this._zoom=Math.max(1,Math.round(this._zoom/1.5*100)/100);this._render();});
+    if(zoomReset)zoomReset.addEventListener("click",()=>{this._zoom=1;this._render();});
     if(ready)this._drawWaterfall(fs,hist,maxF);
   }
 
