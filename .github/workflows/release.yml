@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (for example 2.0.1)"
+        required: true
+        default: "2.0.1"
 
 permissions:
   contents: write
@@ -22,5 +27,5 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event_name == 'workflow_dispatch' && 'v2.0.0' || github.ref_name }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
         run: gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --target main --title "Spectrumizer Card $TAG" --generate-notes
