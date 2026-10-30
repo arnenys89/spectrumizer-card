@@ -1,0 +1,18 @@
+name: Validate card
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: node --check spectrumizer-card.js
+      - name: Validate HACS metadata
+        run: python -c "import json; d=json.load(open('hacs.json')); assert d.get('name') == 'Spectrumizer Card'"
