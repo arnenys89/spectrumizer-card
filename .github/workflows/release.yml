@@ -1,0 +1,25 @@
+name: Publish HACS release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JavaScript syntax
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check spectrumizer-card.js
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --title "Spectrumizer Card $TAG" --generate-notes
