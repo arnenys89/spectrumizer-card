@@ -101,8 +101,8 @@ class SpectrumizerCard extends HTMLElement {
     targets.forEach(el=>{
       el.addEventListener('wheel',ev=>{ev.preventDefault();zoomAt(ev.deltaY<0?1.2:1/1.2);},{passive:false});
       el.addEventListener('pointerdown',ev=>{this._drag={id:ev.pointerId,x:ev.clientX,y:ev.clientY,pan:this._pan};el.setPointerCapture(ev.pointerId);});
-      el.addEventListener('pointermove',ev=>{if(!this._drag||this._drag.id!==ev.pointerId)return;const r=el.getBoundingClientRect();const d=el===this.shadowRoot.getElementById('waterfall')?(ev.clientY-this._drag.y)/Math.max(1,r.height):(this._drag.x-ev.clientX)/Math.max(1,r.width);this._pan=Math.max(-.48,Math.min(.48,this._drag.pan+d/this._zoom));this._render();});
-      el.addEventListener('pointerup',ev=>{if(this._drag&&this._drag.id===ev.pointerId)this._drag=null;});
+      el.addEventListener('pointermove',ev=>{if(!this._drag||this._drag.id!==ev.pointerId)return;const r=el.getBoundingClientRect();const d=el===this.shadowRoot.getElementById('waterfall')?(ev.clientY-this._drag.y)/Math.max(1,r.height):(this._drag.x-ev.clientX)/Math.max(1,r.width);this._pan=Math.max(-.48,Math.min(.48,this._drag.pan+d/this._zoom));});
+      el.addEventListener('pointerup',ev=>{if(this._drag&&this._drag.id===ev.pointerId){this._drag=null;this._render();}});
       el.addEventListener('pointercancel',()=>{this._drag=null;});
     });
   }
