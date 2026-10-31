@@ -59,7 +59,7 @@ class SpectrumizerCard extends HTMLElement {
     if(zoomIn)zoomIn.addEventListener("click",()=>{this._zoom=Math.min(32,Math.round(this._zoom*1.5*100)/100);this._render();});
     if(zoomOut)zoomOut.addEventListener("click",()=>{this._zoom=Math.max(1,Math.round(this._zoom/1.5*100)/100);this._render();});
     if(zoomReset)zoomReset.addEventListener("click",()=>{this._zoom=1;this._pan=0;this._render();});
-    if(ready)this._drawWaterfall(fs,hist,minF,maxF);
+    if(hist.length)this._drawWaterfall(fs,hist,minF,maxF);
     this._bindPanZoom();
   }
 
@@ -84,10 +84,10 @@ class SpectrumizerCard extends HTMLElement {
     const ctx=c.getContext("2d"),W=c.width,H=c.height,frames=hist.slice(-Math.max(1,Math.min(80,Number(this.config.history_frames)||80)));
     const L=48,R=10,T=4,B=4,pw=W-L-R,ph=H-T-B,first=frames[0]?.magnitudes||[];
     ctx.fillStyle="#080b0b";ctx.fillRect(0,0,W,H);if(!first.length)return;
-    const floorF=Math.max(.5,Number(this.config.min_frequency)||1,minF||0.5);
+    const floorF=Math.max(0.0001,Number(this.config.min_frequency)>0?Number(this.config.min_frequency):Math.min(0.01,maxF/1000),minF||0.0001);
     const yFor=f=>T+(Math.log(maxF/Math.max(floorF,f))/Math.log(maxF/floorF||1))*ph;
     const stops=[[0,5,18,24],[.25,12,66,75],[.5,92,67,132],[.72,202,93,167],[.88,255,155,102],[1,255,229,122]];
-    const colour=db=>{const t=Math.max(0,Math.min(1,(db+90)/70));let l=stops[0],h=stops[stops.length-1];for(let i=1;i<stops.length;i++){if(t<=stops[i][0]){l=stops[i-1];h=stops[i];break;}}const q=(t-l[0])/(h[0]-l[0]||1);return `rgb(${Math.round(l[1]+(h[1]-l[1])*q)},${Math.round(l[2]+(h[2]-l[2])*q)},${Math.round(l[3]+(h[3]-l[3])*q)})`;};
+    const colour=db=>{const t=Math.max(0,Math.min(1,(db+140)/100));let l=stops[0],h=stops[stops.length-1];for(let i=1;i<stops.length;i++){if(t<=stops[i][0]){l=stops[i-1];h=stops[i];break;}}const q=(t-l[0])/(h[0]-l[0]||1);return `rgb(${Math.round(l[1]+(h[1]-l[1])*q)},${Math.round(l[2]+(h[2]-l[2])*q)},${Math.round(l[3]+(h[3]-l[3])*q)})`;};
     const cw=pw/frames.length;
     frames.forEach((frame,i)=>{const arr=frame.magnitudes||[];for(let j=0;j<arr.length;j++){const f=Number(frame.max_frequency_hz||fs[fs.length-1]||maxF)*j/Math.max(1,arr.length-1);if(!Number.isFinite(f)||f<floorF||f<minF||f>maxF)continue;const next=Number(frame.max_frequency_hz||fs[fs.length-1]||maxF)*(j+1)/Math.max(1,arr.length-1);const y1=yFor(f),y2=yFor(Math.min(maxF,Math.max(f,next)));const db=20*Math.log10(Math.max(Number(arr[j])||0,1e-7));ctx.fillStyle=colour(db);ctx.fillRect(L+i*cw,y1,Math.ceil(cw),Math.max(1,y2-y1+1));}});
     ctx.strokeStyle="#303838";ctx.lineWidth=1;[floorF,10,100,1000].filter(f=>f>floorF&&f>minF&&f<maxF).forEach(f=>{const y=yFor(f);ctx.beginPath();ctx.moveTo(L,y);ctx.lineTo(W-R,y);ctx.stroke();});
