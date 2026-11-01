@@ -12,7 +12,15 @@ class SpectrumizerCard extends HTMLElement {
     if (!this.shadowRoot) this.attachShadow({mode:"open"});
     this._render();
   }
-  set hass(hass) { this._hass=hass; this._render(); }
+  set hass(hass) {
+    this._hass=hass;
+    const active=this.shadowRoot?.activeElement;
+    if(active&&active.closest?.(".settings")) {
+      this._pendingLiveRender=true;
+      return;
+    }
+    this._render();
+  }
   getCardSize() { return 8; }
 
   _render() {
@@ -68,7 +76,15 @@ class SpectrumizerCard extends HTMLElement {
         .short{min-height:70px}.footer{margin-top:10px;overflow-wrap:anywhere}
       </style>`;
     const settingsPanel=this.shadowRoot.querySelector("details.settings");
-    if(settingsPanel)settingsPanel.open=settingsWasOpen;
+    if(settingsPanel){
+      settingsPanel.open=settingsWasOpen;
+      settingsPanel.addEventListener("focusout",ev=>{
+        if(!settingsPanel.contains(ev.relatedTarget)){
+          this._pendingLiveRender=false;
+          this._render();
+        }
+      });
+    }
     const zoomIn=this.shadowRoot.getElementById("zoom-in");
     const zoomOut=this.shadowRoot.getElementById("zoom-out");
     const zoomReset=this.shadowRoot.getElementById("zoom-reset");
