@@ -14,11 +14,9 @@ class SpectrumizerCard extends HTMLElement {
   }
   set hass(hass) {
     this._hass=hass;
-    const active=this.shadowRoot?.activeElement;
-    if(active&&active.closest?.(".settings")) {
-      this._pendingLiveRender=true;
-      return;
-    }
+    // Do not replace the card DOM while the settings panel is open.
+    // This preserves the panel, input focus and in-progress edits on mobile too.
+    if(this.shadowRoot?.querySelector("details.settings")?.open) return;
     this._render();
   }
   getCardSize() { return 8; }
@@ -78,11 +76,8 @@ class SpectrumizerCard extends HTMLElement {
     const settingsPanel=this.shadowRoot.querySelector("details.settings");
     if(settingsPanel){
       settingsPanel.open=settingsWasOpen;
-      settingsPanel.addEventListener("focusout",ev=>{
-        if(!settingsPanel.contains(ev.relatedTarget)){
-          this._pendingLiveRender=false;
-          this._render();
-        }
+      settingsPanel.addEventListener("toggle",()=>{
+        if(!settingsPanel.open) this._render();
       });
     }
     const zoomIn=this.shadowRoot.getElementById("zoom-in");
