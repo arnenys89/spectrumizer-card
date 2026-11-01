@@ -136,36 +136,45 @@ class SpectrumizerCard extends HTMLElement {
       palette[k*4+3]=255;
     }
     const range=Number(this.config.contrast)||40;
+    // Build the spectrogram in its natural orientation: frequency on X, time on Y.
+    // Row 0 is the newest frame; older frames move downward.
     const image=ctx.createImageData(pw,ph);
-    frames.forEach((frame,x)=>{
-      const mags=frame.magnitudes||[];
-      if(mags.length<2)return;
-      const frameMax=Number(frame.max_frequency_hz)||Number(fs[fs.length-1])||topF;
-      for(let py=0;py<ph;py++){
-        // Logarithmic frequency axis; interpolate between FFT bins for a continuous spectrogram.
-        const ratio=py/Math.max(1,ph-1);
-        const freq=topF*Math.pow(floorF/topF,ratio);
-        const bin=Math.max(0,Math.min(mags.length-1,freq/frameMax*(mags.length-1)));
-        const i0=Math.floor(bin),i1=Math.min(mags.length-1,i0+1),mix=bin-i0;
-        const m0=Math.max(0,Number(mags[i0])||0),m1=Math.max(0,Number(mags[i1])||0);
-        const mag=m0+(m1-m0)*mix;
+    for(let py=0;py<ph;py++){
+      const timePosition=py/Math.max(1,ph-1);
+      const framePosition=(1-timePosition)*(frames.length-1);
+      const f0=Math.floor(framePosition),f1=Math.min(frames.length-1,f0+1),ft=framePosition-f0;
+      const frameA=frames[f0],frameB=frames[f1];
+      const magsA=frameA.magnitudes||[],magsB=frameB.magnitudes||[];
+      const maxA=Number(frameA.max_frequency_hz)||Number(fs[fs.length-1])||topF;
+      const maxB=Number(frameB.max_frequency_hz)||Number(fs[fs.length-1])||topF;
+      for(let px=0;px<pw;px++){
+        const freq=topF*Math.pow(floorF/topF,px/Math.max(1,pw-1));
+        const sample=(mags,maxFreq)=>{
+          if(mags.length<2)return 0;
+          const bin=Math.max(0,Math.min(mags.length-1,freq/maxFreq*(mags.length-1)));
+          const i0=Math.floor(bin),i1=Math.min(mags.length-1,i0+1),mix=bin-i0;
+          return Math.max(0,Number(mags[i0])||0)*(1-mix)+Math.max(0,Number(mags[i1])||0)*mix;
+        };
+        const mag=sample(magsA,maxA)*(1-ft)+sample(magsB,maxB)*ft;
         const db=20*Math.log10(Math.max(mag,1e-7));
         const t=Math.max(0,Math.min(1,(db+140)/range));
-        const pi=Math.round(t*255)*4,offset=(py*pw+x)*4;
+        const pi=Math.round(t*255)*4,offset=(py*pw+px)*4;
         image.data[offset]=palette[pi];image.data[offset+1]=palette[pi+1];image.data[offset+2]=palette[pi+2];image.data[offset+3]=255;
       }
+    }
+    ctx.putImageData(image,L,T);
+    // Frequency labels remain on the horizontal axis; time flows vertically, newest at top.
+    ctx.strokeStyle="#303838";ctx.lineWidth=1;
+    [floorF,10,100,1000].filter(v=>v>floorF&&v<topF).forEach(v=>{
+      const x=L+Math.log(topF/v)/Math.log(topF/floorF)*pw;
+      ctx.beginPath();ctx.moveTo(x,T);ctx.lineTo(x,H-B);ctx.stroke();
     });
-    // Stretch each time frame across its full column width: no horizontal gaps.
-    const temp=document.createElement("canvas");temp.width=frames.length;temp.height=ph;
-    temp.getContext("2d").putImageData(image,0,0);
-    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
-    ctx.drawImage(temp,L,T,pw,ph);
-    ctx.strokeStyle="#424848";ctx.lineWidth=1;ctx.strokeRect(L,T,pw,ph);
-    ctx.fillStyle="#aab0b4";ctx.font="11px sans-serif";ctx.textAlign="right";
+    ctx.fillStyle="#aab0b4";ctx.font="11px sans-serif";ctx.textAlign="center";
     [floorF,10,100,1000].filter((v,i,ar)=>v>=floorF&&v<=topF&&ar.indexOf(v)===i).forEach(v=>{
-      const y=T+Math.log(topF/v)/Math.log(topF/floorF)*ph;
-      ctx.fillText(v>=1000?(v/1000)+"k":String(v),L-7,y+4);
+      const x=L+Math.log(topF/v)/Math.log(topF/floorF)*pw;
+      ctx.fillText(v>=1000?(v/1000)+"k":String(v),x,H-2);
     });
+    ctx.strokeStyle="#424848";ctx.strokeRect(L,T,pw,ph);
   }
   _bindPanZoom() {
     const targets=[this.shadowRoot.querySelector('svg'),this.shadowRoot.getElementById('waterfall')].filter(Boolean);
