@@ -17,6 +17,7 @@ class SpectrumizerCard extends HTMLElement {
 
   _render() {
     if (!this.shadowRoot || !this._hass || !this.config) return;
+    const settingsWasOpen=this.shadowRoot.querySelector("details.settings")?.open ?? false;
     const state=this._hass.states[this.config.entity], a=state?.attributes||{};
     const fs=a.frequencies||[], ms=a.magnitudes||[], hist=a.history||[];
     const ready=a.ready===true && fs.length===ms.length && fs.length>1;
@@ -66,6 +67,8 @@ class SpectrumizerCard extends HTMLElement {
         .settings{margin:10px 0;padding:8px;border:1px solid var(--divider-color);border-radius:8px}.settings summary{cursor:pointer;font-size:13px;font-weight:500}.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:12px 0}.settings-grid label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--secondary-text-color)}.settings-grid input,.settings-grid select{box-sizing:border-box;width:100%;min-width:0;padding:7px;border:1px solid var(--divider-color);border-radius:5px;background:var(--card-background-color);color:var(--primary-text-color)}.settings-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.settings-actions button{padding:7px 10px;border:1px solid var(--divider-color);border-radius:6px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer}.settings-actions small{font-size:12px;color:var(--secondary-text-color)}\n        .timeaxis{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:5px 0 2px 48px}.timeaxis .now{font-weight:600;color:var(--primary-text-color)}.timeaxis .past{color:var(--secondary-text-color);font-size:11px}.empty{min-height:180px;display:grid;place-items:center;text-align:center;color:var(--secondary-text-color)}
         .short{min-height:70px}.footer{margin-top:10px;overflow-wrap:anywhere}
       </style>`;
+    const settingsPanel=this.shadowRoot.querySelector("details.settings");
+    if(settingsPanel)settingsPanel.open=settingsWasOpen;
     const zoomIn=this.shadowRoot.getElementById("zoom-in");
     const zoomOut=this.shadowRoot.getElementById("zoom-out");
     const zoomReset=this.shadowRoot.getElementById("zoom-reset");
