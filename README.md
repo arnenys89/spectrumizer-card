@@ -1,6 +1,6 @@
 # Spectrumizer Card
 
-**Current version: 2.0.3**
+**Current version: 2.0.4**
 
 A custom Lovelace dashboard card for the [Spectrumizer Home Assistant integration](https://github.com/arnenys89/Spectrumizer). It displays the live FFT spectrum and a waterfall spectrogram of recent history, with interactive pan and zoom.
 
