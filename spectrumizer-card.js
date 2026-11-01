@@ -33,6 +33,19 @@ class SpectrumizerCard extends HTMLElement {
           <div><small>Samples</small><strong>${a.samples_collected??0} / ${a.window_size??"—"}</strong></div>
           <div><small>Resolutie</small><strong>${a.frequency_resolution_hz??"—"} Hz</strong></div>
         </div>
+        <details class="settings"><summary>Instellingen</summary>
+          <div class="settings-grid">
+            <label>Minimum frequentie (Hz)<input id="min-frequency" type="number" min="0.0001" step="any" value="${this.config.min_frequency??0.01}"></label>
+            <label>Maximum frequentie (Hz)<input id="max-frequency" type="number" min="0.001" step="any" value="${this.config.max_frequency??baseMaxF}"></label>
+            <label>Geschiedenisframes<input id="history-frames" type="number" min="1" max="20" value="${this.config.history_frames??20}"></label>
+            <label>Contrast spectrogram<input id="contrast" type="range" min="10" max="100" step="5" value="${this.config.contrast??40}"><small id="contrast-value">${this.config.contrast??40}%</small></label>
+            <label>Hoogte spectrogram (px)<input id="waterfall-height" type="number" min="120" max="700" step="20" value="${this.config.waterfall_height??300}"></label>
+            <label>Frequentiepunten geschiedenis<input id="history-bins" type="number" min="16" max="513" step="1" value="${a.history_frequency_bins??129}"></label>
+            <label>Samplefrequentie (Hz)<input id="sampling-rate" type="number" min="0.1" max="100" step="0.1" value="${a.sampling_rate_hz??10}"></label>
+            <label>FFT-venstergrootte<select id="window-size">${[32,64,128,256,512,1024].map(n=>`<option value="${n}" ${Number(a.window_size??256)===n?'selected':''}>${n}</option>`).join("")}</select></label>
+          </div>
+          <div class="settings-actions"><button id="apply-display" type="button">Weergave toepassen</button><button id="apply-fft" type="button">FFT-instellingen opslaan</button><small id="settings-status" role="status"></small></div>
+        </details>
         <div class="zoom-controls" aria-label="Frequentiezoom">
           <span>Frequentiezoom</span>
           <button id="zoom-out" type="button" title="Uitzoomen" aria-label="Uitzoomen">−</button>
@@ -49,8 +62,8 @@ class SpectrumizerCard extends HTMLElement {
         :host{display:block}.content{padding:12px 14px 14px}.summary{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:12px}
         .summary>div{display:flex;flex-direction:column;gap:4px;min-width:90px}.zoom-controls{display:flex;align-items:center;gap:8px;margin:4px 0 8px}.zoom-controls span{font-size:12px;color:var(--secondary-text-color);margin-right:auto}.zoom-controls button{min-width:32px;height:30px;border:1px solid var(--divider-color);border-radius:6px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:18px;cursor:pointer}.zoom-controls button:last-of-type{font-size:12px;padding:0 10px}.zoom-controls button:disabled{opacity:.35;cursor:default}.zoom-controls small,.footer,.timeaxis{color:var(--secondary-text-color);font-size:12px}
         strong{font-size:17px;font-weight:500}.section-title{font-size:14px;font-weight:500;margin:14px 0 6px}
-        svg{display:block;width:100%;height:auto}canvas{display:block;width:100%;height:300px;background:#080b0b}
-        .timeaxis{display:flex;justify-content:space-between;padding:4px 0}.empty{min-height:180px;display:grid;place-items:center;text-align:center;color:var(--secondary-text-color)}
+        svg{display:block;width:100%;height:auto}canvas{display:block;width:100%;height:${Math.max(120,Math.min(700,Number(this.config.waterfall_height)||300))}px;background:#080b0b}
+        .settings{margin:10px 0;padding:8px;border:1px solid var(--divider-color);border-radius:8px}.settings summary{cursor:pointer;font-size:13px;font-weight:500}.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:12px 0}.settings-grid label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--secondary-text-color)}.settings-grid input,.settings-grid select{box-sizing:border-box;width:100%;min-width:0;padding:7px;border:1px solid var(--divider-color);border-radius:5px;background:var(--card-background-color);color:var(--primary-text-color)}.settings-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.settings-actions button{padding:7px 10px;border:1px solid var(--divider-color);border-radius:6px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer}.settings-actions small{font-size:12px;color:var(--secondary-text-color)}\n        .timeaxis{display:flex;justify-content:space-between;padding:4px 0}.empty{min-height:180px;display:grid;place-items:center;text-align:center;color:var(--secondary-text-color)}
         .short{min-height:70px}.footer{margin-top:10px;overflow-wrap:anywhere}
       </style>`;
     const zoomIn=this.shadowRoot.getElementById("zoom-in");
@@ -59,6 +72,28 @@ class SpectrumizerCard extends HTMLElement {
     if(zoomIn)zoomIn.addEventListener("click",()=>{this._zoom=Math.min(32,Math.round(this._zoom*1.5*100)/100);this._render();});
     if(zoomOut)zoomOut.addEventListener("click",()=>{this._zoom=Math.max(1,Math.round(this._zoom/1.5*100)/100);this._render();});
     if(zoomReset)zoomReset.addEventListener("click",()=>{this._zoom=1;this._pan=0;this._render();});
+    const contrast=this.shadowRoot.getElementById("contrast");
+    if(contrast)contrast.addEventListener("input",()=>{this.shadowRoot.getElementById("contrast-value").textContent=contrast.value+"%";});
+    const display=this.shadowRoot.getElementById("apply-display");
+    if(display)display.addEventListener("click",()=>{
+      const v=id=>Number(this.shadowRoot.getElementById(id).value);
+      this.config={...this.config,min_frequency:Math.max(0.0001,v("min-frequency")),max_frequency:Math.max(0.001,v("max-frequency")),history_frames:Math.max(1,Math.min(20,v("history-frames"))),contrast:v("contrast"),waterfall_height:Math.max(120,Math.min(700,v("waterfall-height")))};
+      this._render();
+    });
+    const fft=this.shadowRoot.getElementById("apply-fft");
+    if(fft)fft.addEventListener("click",async()=>{
+      const status=this.shadowRoot.getElementById("settings-status");
+      const number=id=>Number(this.shadowRoot.getElementById(id).value);
+      try{
+        await this._hass.callService("spectrumizer","set_options",{
+          source_entity:a.source_entity,
+          sampling_rate:number("sampling-rate"),
+          window_size:number("window-size"),
+          history_bins:number("history-bins")
+        });
+        status.textContent="FFT-instellingen opgeslagen. De integratie wordt opnieuw geladen.";
+      }catch(err){status.textContent="Opslaan mislukt: "+(err.message||String(err));}
+    });
     if(hist.length)this._drawWaterfall(fs,hist,minF,maxF);
     this._bindPanZoom();
   }
@@ -87,7 +122,7 @@ class SpectrumizerCard extends HTMLElement {
     const floorF=Math.max(0.0001,Number(this.config.min_frequency)>0?Number(this.config.min_frequency):Math.min(0.01,maxF/1000),minF||0.0001);
     const yFor=f=>T+(Math.log(maxF/Math.max(floorF,f))/Math.log(maxF/floorF||1))*ph;
     const stops=[[0,5,18,24],[.25,12,66,75],[.5,92,67,132],[.72,202,93,167],[.88,255,155,102],[1,255,229,122]];
-    const colour=db=>{const t=Math.max(0,Math.min(1,(db+140)/40));let l=stops[0],h=stops[stops.length-1];for(let i=1;i<stops.length;i++){if(t<=stops[i][0]){l=stops[i-1];h=stops[i];break;}}const q=(t-l[0])/(h[0]-l[0]||1);return `rgb(${Math.round(l[1]+(h[1]-l[1])*q)},${Math.round(l[2]+(h[2]-l[2])*q)},${Math.round(l[3]+(h[3]-l[3])*q)})`;};
+    const colour=db=>{const t=Math.max(0,Math.min(1,(db+140)/(Number(this.config.contrast)||40)));let l=stops[0],h=stops[stops.length-1];for(let i=1;i<stops.length;i++){if(t<=stops[i][0]){l=stops[i-1];h=stops[i];break;}}const q=(t-l[0])/(h[0]-l[0]||1);return `rgb(${Math.round(l[1]+(h[1]-l[1])*q)},${Math.round(l[2]+(h[2]-l[2])*q)},${Math.round(l[3]+(h[3]-l[3])*q)})`;};
     const cw=pw/frames.length;
     frames.forEach((frame,i)=>{const arr=frame.magnitudes||[];for(let j=0;j<arr.length;j++){const f=Number(frame.max_frequency_hz||fs[fs.length-1]||maxF)*j/Math.max(1,arr.length-1);if(!Number.isFinite(f)||f<floorF||f<minF||f>maxF)continue;const next=Number(frame.max_frequency_hz||fs[fs.length-1]||maxF)*(j+1)/Math.max(1,arr.length-1);const y1=yFor(f),y2=yFor(Math.min(maxF,Math.max(f,next)));const db=20*Math.log10(Math.max(Number(arr[j])||0,1e-7));ctx.fillStyle=colour(db);ctx.fillRect(L+i*cw,y1,Math.ceil(cw),Math.max(1,y2-y1+1));}});
     ctx.strokeStyle="#303838";ctx.lineWidth=1;[floorF,10,100,1000].filter(f=>f>floorF&&f>minF&&f<maxF).forEach(f=>{const y=yFor(f);ctx.beginPath();ctx.moveTo(L,y);ctx.lineTo(W-R,y);ctx.stroke();});
