@@ -115,20 +115,54 @@ class SpectrumizerCard extends HTMLElement {
   }
 
   _drawWaterfall(fs,hist,minF,maxF) {
-    const c=this.shadowRoot.getElementById("waterfall");if(!c)return;
-    const ctx=c.getContext("2d"),W=c.width,H=c.height,frames=hist.slice(-Math.max(1,Math.min(80,Number(this.config.history_frames)||80)));
-    const L=48,R=10,T=4,B=4,pw=W-L-R,ph=H-T-B,first=frames[0]?.magnitudes||[];
-    ctx.fillStyle="#080b0b";ctx.fillRect(0,0,W,H);if(!first.length)return;
+    const canvas=this.shadowRoot.getElementById("waterfall");if(!canvas)return;
+    const ctx=canvas.getContext("2d"),W=canvas.width,H=canvas.height;
+    const frames=hist.slice(-Math.max(1,Math.min(80,Number(this.config.history_frames)||80)));
+    const L=48,R=10,T=4,B=4,pw=W-L-R,ph=H-T-B;
+    ctx.fillStyle="#080b0b";ctx.fillRect(0,0,W,H);
+    if(!frames.length||!frames.some(f=>Array.isArray(f.magnitudes)&&f.magnitudes.length>1))return;
     const floorF=Math.max(0.0001,Number(this.config.min_frequency)>0?Number(this.config.min_frequency):Math.min(0.01,maxF/1000),minF||0.0001);
-    const yFor=f=>T+(Math.log(maxF/Math.max(floorF,f))/Math.log(maxF/floorF||1))*ph;
-    const stops=[[0,5,18,24],[.25,12,66,75],[.5,92,67,132],[.72,202,93,167],[.88,255,155,102],[1,255,229,122]];
-    const colour=db=>{const t=Math.max(0,Math.min(1,(db+140)/(Number(this.config.contrast)||40)));let l=stops[0],h=stops[stops.length-1];for(let i=1;i<stops.length;i++){if(t<=stops[i][0]){l=stops[i-1];h=stops[i];break;}}const q=(t-l[0])/(h[0]-l[0]||1);return `rgb(${Math.round(l[1]+(h[1]-l[1])*q)},${Math.round(l[2]+(h[2]-l[2])*q)},${Math.round(l[3]+(h[3]-l[3])*q)})`;};
-    const cw=pw/frames.length;
-    frames.forEach((frame,i)=>{const arr=frame.magnitudes||[];for(let j=0;j<arr.length;j++){const f=Number(frame.max_frequency_hz||fs[fs.length-1]||maxF)*j/Math.max(1,arr.length-1);if(!Number.isFinite(f)||f<floorF||f<minF||f>maxF)continue;const next=Number(frame.max_frequency_hz||fs[fs.length-1]||maxF)*(j+1)/Math.max(1,arr.length-1);const y1=yFor(f),y2=yFor(Math.min(maxF,Math.max(f,next)));const db=20*Math.log10(Math.max(Number(arr[j])||0,1e-7));ctx.fillStyle=colour(db);ctx.fillRect(L+i*cw,y1,Math.ceil(cw),Math.max(1,y2-y1+1));}});
-    ctx.strokeStyle="#303838";ctx.lineWidth=1;[floorF,10,100,1000].filter(f=>f>floorF&&f>minF&&f<maxF).forEach(f=>{const y=yFor(f);ctx.beginPath();ctx.moveTo(L,y);ctx.lineTo(W-R,y);ctx.stroke();});
+    const topF=Math.max(floorF*1.001,Math.min(maxF,Number(this.config.max_frequency)>0?Number(this.config.max_frequency):maxF));
+    const stops=[[0,5,18,24],[.2,12,66,75],[.42,40,130,132],[.62,92,67,160],[.78,202,93,167],[.9,255,155,102],[1,255,239,150]];
+    const palette=new Uint8ClampedArray(256*4);
+    for(let k=0;k<256;k++){
+      const t=k/255;let lo=stops[0],hi=stops[stops.length-1];
+      for(let s=1;s<stops.length;s++){if(t<=stops[s][0]){lo=stops[s-1];hi=stops[s];break;}}
+      const q=(t-lo[0])/(hi[0]-lo[0]||1);
+      for(let ch=0;ch<3;ch++)palette[k*4+ch]=Math.round(lo[ch+1]+(hi[ch+1]-lo[ch+1])*q);
+      palette[k*4+3]=255;
+    }
+    const range=Number(this.config.contrast)||40;
+    const image=ctx.createImageData(pw,ph);
+    frames.forEach((frame,x)=>{
+      const mags=frame.magnitudes||[];
+      if(mags.length<2)return;
+      const frameMax=Number(frame.max_frequency_hz)||Number(fs[fs.length-1])||topF;
+      for(let py=0;py<ph;py++){
+        // Logarithmic frequency axis; interpolate between FFT bins for a continuous spectrogram.
+        const ratio=py/Math.max(1,ph-1);
+        const freq=topF*Math.pow(floorF/topF,ratio);
+        const bin=Math.max(0,Math.min(mags.length-1,freq/frameMax*(mags.length-1)));
+        const i0=Math.floor(bin),i1=Math.min(mags.length-1,i0+1),mix=bin-i0;
+        const m0=Math.max(0,Number(mags[i0])||0),m1=Math.max(0,Number(mags[i1])||0);
+        const mag=m0+(m1-m0)*mix;
+        const db=20*Math.log10(Math.max(mag,1e-7));
+        const t=Math.max(0,Math.min(1,(db+140)/range));
+        const pi=Math.round(t*255)*4,offset=(py*pw+x)*4;
+        image.data[offset]=palette[pi];image.data[offset+1]=palette[pi+1];image.data[offset+2]=palette[pi+2];image.data[offset+3]=255;
+      }
+    });
+    // Stretch each time frame across its full column width: no horizontal gaps.
+    const temp=document.createElement("canvas");temp.width=frames.length;temp.height=ph;
+    temp.getContext("2d").putImageData(image,0,0);
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+    ctx.drawImage(temp,L,T,pw,ph);
+    ctx.strokeStyle="#424848";ctx.lineWidth=1;ctx.strokeRect(L,T,pw,ph);
     ctx.fillStyle="#aab0b4";ctx.font="11px sans-serif";ctx.textAlign="right";
-    [floorF,10,100,1000].filter((f,i,ar)=>f>=minF&&f<=maxF&&ar.indexOf(f)===i).forEach(f=>ctx.fillText(f>=1000?(f/1000)+"k":String(f),L-7,yFor(f)+4));
-    ctx.strokeStyle="#424848";ctx.strokeRect(L,T,pw,ph);
+    [floorF,10,100,1000].filter((v,i,ar)=>v>=floorF&&v<=topF&&ar.indexOf(v)===i).forEach(v=>{
+      const y=T+Math.log(topF/v)/Math.log(topF/floorF)*ph;
+      ctx.fillText(v>=1000?(v/1000)+"k":String(v),L-7,y+4);
+    });
   }
   _bindPanZoom() {
     const targets=[this.shadowRoot.querySelector('svg'),this.shadowRoot.getElementById('waterfall')].filter(Boolean);
